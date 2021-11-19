@@ -37,6 +37,11 @@ pub enum TYPE {
       /// Host address (IPv6) [rfc3596](https://tools.ietf.org/html/rfc3596)
     AAAA = 28,
 
+
+    /// https://datatracker.ietf.org/doc/html/rfc2052
+    ///         Service.Proto.Name TTL Class SRV Priority Weight Port Target
+    SRV = 33,
+
     Unknown =255 ,
 }
 impl TYPE {

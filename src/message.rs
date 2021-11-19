@@ -1,7 +1,7 @@
 use crate::Result;
 
 use crate::byte_buf::DnsByteBuf;
-use crate::name::{NAME, QNAME};
+use crate::name::{NAME};
 use crate::resource_record::*;
 
 
@@ -16,11 +16,13 @@ pub struct Message {
 
 
 impl Message {
-
+    ///
+    /// 
+    /// 
     pub fn new(domain: &str, query: bool) -> Message {
-        let qname = QNAME{
+        let qname = NAME{
             name: domain.to_owned(),
-            length:0usize,
+            length: domain.len(),
         };
         let question = Question {
             qname, 
@@ -28,17 +30,51 @@ impl Message {
             qclass :  QCLASS::IN,
 
         };
-
-        let header = Header::new(query, OPCODE::QUERY);
-
+        let mut questions = Vec::new();
+        questions.push(question);
+        let header = Header::new(11,query, OPCODE::QUERY,questions.len() as u16);
         Message {
             header,
-            question:Vec::new(), 
+            question: questions, 
             answer: Vec::new(),
             authority: Vec::new(),
             additional: Vec::new(),
         }
     }
+
+    ///
+    /// authoritative name server query
+    /// 
+    pub fn new_query(domain: &str, qtype:QTYPE) -> Message {
+        let qname = NAME{
+            name: domain.to_owned(),
+            length: domain.len(),
+        };
+        let question = Question {
+            qname, 
+            qtype : qtype,
+            qclass :  QCLASS::IN,
+
+        };
+        let mut questions = Vec::new();
+        questions.push(question);
+        let header = Header::new(11,true, OPCODE::QUERY,questions.len() as u16);
+        Message {
+            header,
+            question: questions, 
+            answer: Vec::new(),
+            authority: Vec::new(),
+            additional: Vec::new(),
+        }
+    }
+
+    ///
+    /// authoritative name server query
+    /// 
+    pub fn new_query_ns(domain: &str,) -> Message {
+        Message::new_query(domain,QTYPE::NS)
+    }
+
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let v = Vec::new();
@@ -123,11 +159,11 @@ pub struct Header {
 }
 
 impl Header{
-    pub fn new(query:bool, op_code: OPCODE) ->Self {
+    pub fn new(id:u16, query:bool, op_code: OPCODE, question_count: u16) ->Self {
         Header {
-            id:0u16,
-            flag: HeaderFlag::new(query, op_code),
-            question_count: 0u16,
+            id:id,
+            flag: HeaderFlag::new(!query, op_code),
+            question_count: question_count,
             answer_count: 0u16,
             nameserver_count: 0u16,
             additional_count: 0u16,
@@ -218,9 +254,9 @@ struct HeaderFlag {
 
 
 impl HeaderFlag{
-    pub fn new(query:bool, op_code: OPCODE, ) ->Self {
+    pub fn new(response:bool, op_code: OPCODE, ) ->Self {
         HeaderFlag {
-            qr:query as u8,
+            qr:response as u8,
             opcode  :op_code,
             aa: 0u8,
             tc:  0u8,       
@@ -329,14 +365,14 @@ pub enum QTYPE {
 
     TXT = 16, //text strings
 
-      /// Host address (IPv6) [rfc3596](https://tools.ietf.org/html/rfc3596)
-    AAAA = 28,
+    AAAA = 28, /// Host address (IPv6) [rfc3596](https://tools.ietf.org/html/rfc3596)
 
     AXFR     =       252, //A request for a transfer of an entire zone
 
     MAILB     =      253 , //A request for mailbox-related records (MB, MG or MR)
 
     MAILA    =       254 , //A request for mail agent RRs (Obsolete - see MX)
+   
     ANY  = 255,
 
 }
@@ -378,7 +414,7 @@ impl QCLASS {
 
 #[derive(Debug)]
 pub struct Question {
-    qname: QNAME,
+    qname: NAME,
     qtype :QTYPE,
     qclass: QCLASS,
 }
@@ -386,7 +422,7 @@ pub struct Question {
 impl Question {
 
     pub fn from_bytes(bytes: &mut DnsByteBuf) -> Result<Self> {
-        let qname =QNAME::from( NAME::from_bytes(bytes)?);
+        let qname = NAME::from_bytes(bytes)?;
         let qtype = bytes.get_u16()?;
         let qclass =  bytes.get_u16()?;
 
