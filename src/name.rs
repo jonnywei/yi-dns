@@ -11,14 +11,15 @@ pub struct  NAME {
 impl NAME {
 
     pub fn from_bytes(bytes: &mut DnsByteBuf) -> Result<NAME> {
-        let mut index:usize = 0;
+
         let mut total_length = 0;
         let mut string = String::new();
+        
         loop {
             let length = bytes.get_u8()?;
             if length & COMPRESSION_MASK == COMPRESSION_MASK {
                 let next = bytes.get_u8()?;
-                index = (length <<2 >>6 ) as usize * 256 + next as usize;
+                let  index = (length <<2 >>6 ) as usize * 256 + next as usize;
                 println!("{},{}",index,next);
                 let inner_name:NAME = NAME::from_index_bytes(bytes, index)?;
                 string.push_str(&inner_name.name);
@@ -27,7 +28,7 @@ impl NAME {
             }else {
                 total_length = total_length +length as usize;
                 if length == 0 {
-                    if string.len() >= 0 {
+                    if string.len() > 0 {
                         string.pop(); //pop last .
                     }
                     break;
@@ -62,7 +63,7 @@ impl NAME {
                 index = index + 1;
                 total_length = total_length + length as usize;
                 if length == 0 {
-                    if string.len() >= 0 {
+                    if string.len() > 0 {
                         string.pop(); //pop last .
                     }
                     break;
@@ -81,7 +82,7 @@ impl NAME {
     }
     pub fn to_bytes(&self) ->Vec<u8> {
         let mut v = Vec::<u8>::new();
-        let mut splits = self.name.split(".");
+        let splits = self.name.split(".");
         for s in splits {
             v.push(s.len() as u8);
             v.extend(s.to_string().into_bytes());

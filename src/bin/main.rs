@@ -19,7 +19,7 @@ fn main() {
     //     05, 0x62, 0x61, 0x69, 0x64, 0x75, 03, 0x63, 0x6f ,0x6d, 00, 00, 01, 00, 01], "10.151.6.254:53");
 
     let query = Message::new_query_ns("www.sohu.com");
-    socket.send_to(&query.to_bytes().to_vec(), "10.151.6.254:53");
+    socket.send_to(&query.to_bytes().unwrap().to_vec(), "10.151.6.254:53");
 
     let mut buf = [0u8;1024];
     

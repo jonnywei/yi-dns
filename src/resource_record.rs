@@ -37,7 +37,6 @@ pub enum TYPE {
       /// Host address (IPv6) [rfc3596](https://tools.ietf.org/html/rfc3596)
     AAAA = 28,
 
-
     /// https://datatracker.ietf.org/doc/html/rfc2052
     ///         Service.Proto.Name TTL Class SRV Priority Weight Port Target
     SRV = 33,
@@ -58,6 +57,7 @@ impl TYPE {
         x as u8 as u16
     }
 }
+const CACHE_FLUSH_MARK:u16 = 0b1000_0000_0000_0000;
 
 #[derive(Debug, Clone, Copy)]
 pub enum CLASS {
@@ -91,7 +91,12 @@ impl CLASS {
 pub struct ResouceRecord {
     name: NAME,
     rtype: TYPE,
-    class: CLASS,
+    rclass: CLASS,
+    ///
+    /// mdns use 
+    /// https://datatracker.ietf.org/doc/html/rfc6762#section-10.3
+    /// 
+    pub cache_flush:bool,
     pub ttl: u32,
     pub rd_length: u16,
     pub rdata: RDATA,
@@ -104,27 +109,35 @@ impl ResouceRecord {
         let rtype = bytes.get_u16()?;
         let rtype = TYPE::from_u16(rtype)?;
         let rclass = bytes.get_u16()?;
-        let rclass = CLASS::from_u16(rclass)?;
+        let cache_flush = rclass & CACHE_FLUSH_MARK == CACHE_FLUSH_MARK;
+        let rclass = CLASS::from_u16(rclass& !CACHE_FLUSH_MARK)?;
         let ttl = bytes.get_u32()?;
         let rd_length = bytes.get_u16()?;
-        let rd_data = bytes.get_bytes(rd_length as usize)?;
+        // let rd_data = bytes.get_bytes(rd_length as usize)?;
         Ok(ResouceRecord {
             name,
             rtype,
-            class: rclass,
+            rclass,
+            cache_flush,
             ttl,
             rd_length,
-            rdata: RDATA::BYTE(rd_data.into()),
+            rdata: RDATA::from_bytes(rtype, rd_length,  bytes)?,
         })
     }
 
     pub fn to_bytes(&self, byte_buf: &mut DnsByteBuf) {
         byte_buf.put_vec( self.name.to_bytes());
         byte_buf.put_u16(self.rtype.to_u16());
-        byte_buf.put_u16(self.class.to_u16());
+       
+        let mut rclass = self.rclass.to_u16();
+        if self.cache_flush {
+            rclass = CACHE_FLUSH_MARK | rclass;
+        }
+        byte_buf.put_u16(rclass);
+
         byte_buf.put_u32(self.ttl);
         byte_buf.put_u16(self.rd_length);
-        // byte_buf.put_slice(self.rdata);
+        self.rdata.to_bytes(byte_buf);
     }
 }
 
@@ -133,5 +146,35 @@ pub enum RDATA {
     CNAME(String),
     PTR(String),
     A(u32),
-    BYTE(Vec<u8>),
+    AAAA(u128),
+    RAW(Vec<u8>),
+}
+
+impl RDATA {
+    pub fn from_bytes(rtype: TYPE, rd_length:u16,  bytes: &mut DnsByteBuf) -> Result<Self> {
+        // let rd_data = bytes.get_bytes(rd_length as usize)?;
+        match rtype {
+            TYPE::A => {
+                 return Ok(RDATA::A(bytes.get_u32()?))   
+            },
+            _ => {
+                return Ok(RDATA::RAW( bytes.get_bytes(rd_length as usize)?.into()))   
+            }
+        }
+    }
+
+    pub fn to_bytes(&self, byte_buf: &mut DnsByteBuf) {
+       
+        match self {
+            RDATA::A(x) => {
+                byte_buf.put_u32(*x); 
+            },
+            RDATA::RAW(x) => {
+                byte_buf.put_slice(x); 
+            },
+            _ => {
+                unreachable!(); 
+            }
+        }
+    }
 }

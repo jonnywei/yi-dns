@@ -28,7 +28,7 @@ impl Message {
             qname, 
             qtype : QTYPE::A,
             qclass :  QCLASS::IN,
-
+            unicast_response:false,
         };
         let mut questions = Vec::new();
         questions.push(question);
@@ -54,6 +54,7 @@ impl Message {
             qname, 
             qtype : qtype,
             qclass :  QCLASS::IN,
+            unicast_response:false,
 
         };
         let mut questions = Vec::new();
@@ -76,10 +77,10 @@ impl Message {
     }
 
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let v = Vec::new();
         let mut byte_buf = DnsByteBuf::new(v,0);
-        self.header.to_bytes(&mut byte_buf);
+        self.header.to_bytes(&mut byte_buf)?;
         for i in 0..self.question.len() {
             self.question[i].to_bytes(&mut byte_buf);
         }
@@ -94,7 +95,7 @@ impl Message {
         }
 
         let vec = byte_buf.get_vec();
-        vec
+        Ok(vec)
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
@@ -242,7 +243,7 @@ impl RCODE{
 
 #[derive(Debug)]
 struct HeaderFlag {
-    qr : u8, // one bit query or response  query (0), or a response (1).
+    response : u8, // one bit query or response  query (0), or a response (1).
     opcode  : OPCODE, //A four bit field that specifies kind of query in this     message
     aa:  u8, 
     tc:  u8,       
@@ -256,7 +257,7 @@ struct HeaderFlag {
 impl HeaderFlag{
     pub fn new(response:bool, op_code: OPCODE, ) ->Self {
         HeaderFlag {
-            qr:response as u8,
+            response:response as u8,
             opcode  :op_code,
             aa: 0u8,
             tc:  0u8,       
@@ -293,7 +294,7 @@ impl HeaderFlag{
         let ra = HeaderFlag::get_bit(&mut flag, 1);
 
         Ok( HeaderFlag {
-            qr:qr,
+            response:qr,
             opcode: OPCODE::from_u8(op_code)?,
             aa,
             tc,       
@@ -315,18 +316,18 @@ impl HeaderFlag{
     pub fn to_u16(&self) -> u16 {
         let mut flag = 0;
         HeaderFlag::put_bit(&mut flag, 1,self.ra);
-        HeaderFlag::put_bit(&mut flag, 3,0);
+        HeaderFlag::put_bit(&mut flag, 3,self.z);
         HeaderFlag::put_bit(&mut flag, 4,self.rcode.to_u8());
 
 
         let mut flag_hight = 0;
-        HeaderFlag::put_bit(&mut flag_hight, 1,self.qr);
+        HeaderFlag::put_bit(&mut flag_hight, 1,self.response);
         HeaderFlag::put_bit(&mut flag_hight, 4,self.opcode.to_u8());
         HeaderFlag::put_bit(&mut flag_hight, 1,self.aa);
         HeaderFlag::put_bit(&mut flag_hight, 1,self.tc);
         HeaderFlag::put_bit(&mut flag_hight, 1,self.rd);
 
-        let mut flag_hight = flag_hight as u16 ;
+        let  flag_hight = flag_hight as u16 ;
         flag_hight <<8 + flag
       }
 }
@@ -412,11 +413,13 @@ impl QCLASS {
     }
 }
 
+const UNICAST_RESPONSE_MARK:u16 = 0b1000_0000_0000_0000;
 #[derive(Debug)]
 pub struct Question {
     qname: NAME,
     qtype :QTYPE,
     qclass: QCLASS,
+    unicast_response:bool,
 }
 
 impl Question {
@@ -425,19 +428,24 @@ impl Question {
         let qname = NAME::from_bytes(bytes)?;
         let qtype = bytes.get_u16()?;
         let qclass =  bytes.get_u16()?;
-
+        let unicast_response = (UNICAST_RESPONSE_MARK & qclass) == UNICAST_RESPONSE_MARK;
+        let qclass = qclass & !UNICAST_RESPONSE_MARK;
         Ok( Question {
             qname, 
             qtype:  QTYPE::from_u16(qtype)?,
             qclass:  QCLASS::from_u16(qclass)?,
+            unicast_response,
         })
     }
 
     pub fn to_bytes(&self, byte_buf: &mut DnsByteBuf) {
         byte_buf.put_vec( self.qname.to_bytes());
-        // byte_buf.put_u16(self.qname.);
         byte_buf.put_u16(self.qtype.to_u16());
-        byte_buf.put_u16(self.qclass.to_u16());
+        let mut qclass = self.qclass.to_u16();
+        if self.unicast_response {
+            qclass = UNICAST_RESPONSE_MARK | qclass;
+        }
+        byte_buf.put_u16(qclass);
       
     }
 }
