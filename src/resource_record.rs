@@ -1,4 +1,4 @@
-use crate::{NAME, Result, YiDnsError, byte_buf::DnsByteBuf};
+use crate::{NAME, Result, YiDnsError, byte_buf::DnsByteBuf, name_cache::NameCache};
 
 // #[derive(Debug, Clone, Copy)]
 // pub enum TYPE {
@@ -166,6 +166,22 @@ impl ResouceRecord {
         self.rdata.to_bytes(byte_buf);
     }
 
+
+    pub fn to_compress_bytes(&self, byte_buf: &mut DnsByteBuf , ctx: &mut NameCache) {
+        let current = byte_buf.get_cursor();
+        byte_buf.put_vec( self.name.to_compress_bytes(ctx,current));
+        byte_buf.put_u16(self.rtype);
+       
+        let mut rclass = self.rclass.to_u16();
+        if self.cache_flush {
+            rclass = CACHE_FLUSH_MARK | rclass;
+        }
+        byte_buf.put_u16(rclass);
+
+        byte_buf.put_u32(self.ttl);
+        byte_buf.put_u16(self.rd_length);
+        self.rdata.to_bytes(byte_buf);
+    }
     pub fn new_rtype(name: String, ttl: u32, rtype: Rtype, rdata:RDATA) -> ResouceRecord {
         ResouceRecord { 
             name:NAME::new(name), 

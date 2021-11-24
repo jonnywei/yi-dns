@@ -5,6 +5,12 @@ pub struct DnsByteBuf {
    index: usize,
 }
 
+impl Default for DnsByteBuf {
+    fn default() -> DnsByteBuf {
+        DnsByteBuf { bytes:Vec::new(), index: 0 }
+    }
+}
+
 impl DnsByteBuf {
 
     pub fn new(bytes:Vec<u8>, index: usize) -> DnsByteBuf{

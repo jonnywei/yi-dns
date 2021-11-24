@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{NameCache, Result};
 
 use crate::byte_buf::DnsByteBuf;
 use crate::name::{NAME};
@@ -72,8 +72,7 @@ impl Message {
 
 
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let v = Vec::new();
-        let mut byte_buf = DnsByteBuf::new(v,0);
+        let mut byte_buf = DnsByteBuf::default();
         self.header.to_bytes(&mut byte_buf)?;
         for i in 0..self.question.len() {
             self.question[i].to_bytes(&mut byte_buf);
@@ -86,6 +85,28 @@ impl Message {
         }
         for an in 0..self.additional.len() {
             self.additional[an].to_bytes(&mut byte_buf);
+        }
+
+        let vec = byte_buf.get_vec();
+        Ok(vec)
+    }
+
+    pub fn to_compress_bytes(&self) -> Result<Vec<u8>> {
+        let mut byte_buf = DnsByteBuf::default();
+        self.header.to_bytes(&mut byte_buf)?;
+        // let name_vec = Vec::new();
+        let mut name_cache = NameCache::new_default();
+        for i in 0..self.question.len() {
+            self.question[i].to_compress_bytes(&mut byte_buf,&mut name_cache);
+        }
+        for an in 0..self.answer.len() {
+            self.answer[an].to_compress_bytes(&mut byte_buf , &mut name_cache);
+        }
+        for an in 0..self.authority.len() {
+            self.authority[an].to_compress_bytes(&mut byte_buf , &mut name_cache);
+        }
+        for an in 0..self.additional.len() {
+            self.additional[an].to_compress_bytes(&mut byte_buf , &mut name_cache);
         }
 
         let vec = byte_buf.get_vec();
@@ -434,6 +455,19 @@ impl Question {
 
     pub fn to_bytes(&self, byte_buf: &mut DnsByteBuf) {
         byte_buf.put_vec( self.qname.to_bytes());
+        byte_buf.put_u16(self.qtype.to_u16());
+        let mut qclass = self.qclass.to_u16();
+        if self.unicast_response {
+            qclass = UNICAST_RESPONSE_MARK | qclass;
+        }
+        byte_buf.put_u16(qclass);
+      
+    }
+
+
+    pub fn to_compress_bytes<'a> (&'a self, byte_buf: &mut DnsByteBuf,ctx:&mut NameCache) {
+        let current = byte_buf.get_cursor();
+        byte_buf.put_vec( self.qname.to_compress_bytes(ctx,current));
         byte_buf.put_u16(self.qtype.to_u16());
         let mut qclass = self.qclass.to_u16();
         if self.unicast_response {

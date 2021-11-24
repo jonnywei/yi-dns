@@ -3,7 +3,7 @@ mod name;
 mod resource_record;
 mod message;
 mod max_sub_domain;
-
+mod name_cache;
 use std::{array::TryFromSliceError, string::FromUtf8Error};
 
 use thiserror::Error;
@@ -11,7 +11,7 @@ use thiserror::Error;
 pub use name::*;
 pub use message::*;
 pub use resource_record::*;
-
+use name_cache::*;
 pub type Result<T> = std::result::Result<T, YiDnsError>;
 
 #[derive(Debug,Error)]
@@ -33,12 +33,8 @@ pub enum YiDnsError{
     Unknown,
     
 }
-#[derive(Debug)]
-pub struct  NameCache<'a> {
-    names : Vec<&'a NAME>,
-    pub  packet_index: usize ,
-}
 
+#[cfg(test)]
 mod tests {
 
     // use crate::message::*;
@@ -227,7 +223,7 @@ mod tests {
         ;
         let message =  Message::from_bytes(bytes.to_vec()).unwrap();
         println!("{:#?}", message);
-        let v = message.to_bytes().unwrap();
+        let v = message.to_compress_bytes().unwrap();
         println!("{:#?}", v);
     }
 
@@ -242,8 +238,8 @@ mod tests {
         ;
         let message =  Message::from_bytes(bytes.to_vec()).unwrap();
         println!("{:#?}", message);
-        let v = message.to_bytes().unwrap();
-        println!("{:#?}", v.len() == bytes.len());
+        let v = message.to_compress_bytes().unwrap();
+        assert_eq!( v.len(),bytes.len());
     }
 
     #[test]
@@ -276,7 +272,7 @@ mod tests {
 
 
     #[test]
-    fn test_mdns_chinese_response(){
+    fn test_mdns_chinese_response() -> Result<()>{
         let bytes = b"\x00\x00\x84\x00\x00\x00\x00\x02\x00\x00\x00\x06\x17\xe9\xa9\xac\
         \xe5\xbb\xb6\xe9\xbe\x99\xe7\x9a\x84\x4d\x61\x63\x42\x6f\x6f\x6b\
         \x20\x50\x72\x6f\x0c\x5f\x64\x65\x76\x69\x63\x65\x2d\x69\x6e\x66\
@@ -301,8 +297,53 @@ mod tests {
         ;
         let message =  Message::from_bytes(bytes.to_vec()).unwrap();
         println!("{:#?}", message);
-        let v = message.to_bytes().unwrap();
+        let v = message.to_compress_bytes().unwrap();
+        let message =  Message::from_bytes(v.to_vec())?;
+        println!("{:#?}", message);
+
+        Ok(())
+        // println!("{:#?}", v);
+    }
+
+
+    #[test]
+    fn test_mdns_response_compress(){
+        let bytes = b"\x00\x00\x84\x00\x00\x00\x00\x06\x00\x00\x00\x02\x0c\x63\x36\x64\
+        \x61\x38\x66\x63\x64\x61\x30\x34\x64\x08\x5f\x61\x69\x72\x64\x72\
+        \x6f\x70\x04\x5f\x74\x63\x70\x05\x6c\x6f\x63\x61\x6c\x00\x00\x21\
+        \x80\x01\x00\x00\x00\x78\x00\x2d\x00\x00\x00\x00\x22\x42\x24\x61\
+        \x30\x63\x39\x39\x32\x38\x62\x2d\x35\x66\x61\x30\x2d\x34\x62\x62\
+        \x36\x2d\x38\x35\x36\x63\x2d\x30\x61\x62\x61\x62\x37\x62\x66\x66\
+        \x65\x61\x32\xc0\x27\xc0\x3e\x00\x1c\x80\x01\x00\x00\x00\x78\x00\
+        \x10\xfe\x80\x00\x00\x00\x00\x00\x00\x10\x42\x1b\xf0\x20\x42\x52\
+        \xb3\xc0\x3e\x00\x01\x80\x01\x00\x00\x00\x78\x00\x04\x0a\x14\x0b\
+        \x06\xc0\x0c\x00\x10\x80\x01\x00\x00\x11\x94\x00\x0b\x0a\x66\x6c\
+        \x61\x67\x73\x3d\x31\x30\x31\x39\x09\x5f\x73\x65\x72\x76\x69\x63\
+        \x65\x73\x07\x5f\x64\x6e\x73\x2d\x73\x64\x04\x5f\x75\x64\x70\xc0\
+        \x27\x00\x0c\x00\x01\x00\x00\x11\x94\x00\x02\xc0\x19\xc0\x19\x00\
+        \x0c\x00\x01\x00\x00\x11\x94\x00\x02\xc0\x0c\xc0\x0c\x00\x2f\x80\
+        \x01\x00\x00\x00\x78\x00\x09\xc0\x0c\x00\x05\x00\x00\x80\x00\x40\
+        \xc0\x3e\x00\x2f\x80\x01\x00\x00\x00\x78\x00\x08\xc0\x3e\x00\x04\
+        \x40\x00\x00\x08"
+        ;
+        let message =  Message::from_bytes(bytes.to_vec()).unwrap();
+        println!("{:#?}", message);
+        let v = message.to_compress_bytes().unwrap();
         println!("{:#?}", v);
+        assert_eq!( v.len(),bytes.len());
+        let message =  Message::from_bytes(v).unwrap();
+        println!("{:#?}", message);
+       
+    }
+
+    #[test]
+    fn test_decode(){
+        let bytes =b"\xe9\xa9\xac\xe5";
+
+        let s =char::from_u32(u32::from_be_bytes(*bytes));
+
+        println!("{:#?}", s);
+
     }
 
 }

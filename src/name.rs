@@ -1,11 +1,12 @@
-use crate::{Result, byte_buf::DnsByteBuf};
+use crate::{NameCache, Result, byte_buf::DnsByteBuf};
 
 pub const COMPRESSION_MASK: u8 = 0b1100_0000;
+ const COMPRESSION_MASK_U16: u16 = 0b1100_0000_0000_0000;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct  NAME {
     pub  name  : String,
-    label : Vec<String>,
+    pub(crate) label : Vec<String>,
     pub  packet_index: usize ,
 }
 
@@ -50,7 +51,6 @@ impl NAME {
     pub  fn from_index_bytes(bytes: &mut DnsByteBuf, index: usize) -> Result<NAME> {
         let mut index:usize = index;
         let mut string = String::new();
-        let mut total_length:usize = 0;
         let mut labels = Vec::new();
         let  packet_index =index;
         loop {
@@ -62,11 +62,9 @@ impl NAME {
                 let mut inner_name:NAME = NAME::from_index_bytes(bytes, index)?;
                 string.push_str(&inner_name.name);
                 labels.append(&mut inner_name.label);
-                total_length = total_length + inner_name.packet_index as usize;
                 break;
             }else {
                 index = index + 1;
-                total_length = total_length + length as usize;
                 if length == 0 {
                     if string.len() > 0 {
                         string.pop(); //pop last .
@@ -87,6 +85,16 @@ impl NAME {
             packet_index,
         })
     }
+
+      /// build new NAME
+      pub fn new(name:String) ->NAME{
+        NAME {
+            packet_index:0 ,
+            label: domain_to_label(&name),
+            name,
+            
+        }
+    }
     pub fn to_bytes(&self) ->Vec<u8> {
         let mut v = Vec::<u8>::new();
         for s in &self.label {
@@ -96,16 +104,27 @@ impl NAME {
         v.push(0);
         v
     }
-    /// build new NAME
-    pub fn new(name:String) ->NAME{
-        NAME {
-            packet_index:0 ,
-            label: domain_to_label(&name),
-            name,
-            
-        }
-    }
+  
 
+    pub fn to_compress_bytes(&self, ctx: & mut NameCache, current: usize) -> Vec<u8> {
+        let result =  ctx.sub_domain(self);
+        ctx.append(self.clone(),current);
+        if result.is_none(){
+            return self.to_bytes();
+        }       
+        let result =  result.unwrap();
+        let label_count =self.label.len() - result.1;
+
+        let mut v = Vec::<u8>::new();
+        for u in 0..label_count {
+            let s =& self.label[u];
+            v.push(s.len() as u8);
+            v.extend(s.to_string().into_bytes());
+        }
+        let pointer = COMPRESSION_MASK_U16 | result.0 as u16;
+        v.extend(u16::to_be_bytes(pointer));
+        v
+    }
  
 }
 
