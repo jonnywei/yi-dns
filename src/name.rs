@@ -4,29 +4,29 @@ pub const COMPRESSION_MASK: u8 = 0b1100_0000;
 
 #[derive(Debug)]
 pub struct  NAME {
-    pub name  : String,
-    pub  length: usize ,
+    pub  name  : String,
+    label : Vec<String>,
+    pub  packet_index: usize ,
 }
 
 impl NAME {
 
     pub fn from_bytes(bytes: &mut DnsByteBuf) -> Result<NAME> {
 
-        let mut total_length = 0;
+        let mut labels = Vec::new();
         let mut string = String::new();
-        
+        let  packet_index = bytes.get_cursor();
         loop {
             let length = bytes.get_u8()?;
             if length & COMPRESSION_MASK == COMPRESSION_MASK {
                 let next = bytes.get_u8()?;
                 let  index = (length <<2 >>6 ) as usize * 256 + next as usize;
                 println!("{},{}",index,next);
-                let inner_name:NAME = NAME::from_index_bytes(bytes, index)?;
+                let mut inner_name:NAME = NAME::from_index_bytes(bytes, index)?;
                 string.push_str(&inner_name.name);
-                total_length = total_length + inner_name.length as usize;
+                labels.append(&mut inner_name.label);
                 break;
             }else {
-                total_length = total_length +length as usize;
                 if length == 0 {
                     if string.len() > 0 {
                         string.pop(); //pop last .
@@ -35,13 +35,15 @@ impl NAME {
                 }
                 let label = String::from_utf8(bytes.get_bytes(length as usize)?.to_vec())?;
                 string.push_str(&label);
+                labels.push(label);
                 string.push_str(".");
             }
           
         }
         Ok( NAME {
+            label:labels,
             name: string,
-            length: total_length,
+            packet_index,
         })
     }
 
@@ -49,15 +51,18 @@ impl NAME {
         let mut index:usize = index;
         let mut string = String::new();
         let mut total_length:usize = 0;
+        let mut labels = Vec::new();
+        let  packet_index =index;
         loop {
             let length = bytes.get_index_u8(index)?;
             if length & COMPRESSION_MASK == COMPRESSION_MASK {
                 let next = bytes.get_index_u8(index+1)?;
                 index = (length <<2 >>6 ) as usize * 256 + next as usize;
                 println!("{},{}",index,next);
-                let inner_name:NAME = NAME::from_index_bytes(bytes, index)?;
+                let mut inner_name:NAME = NAME::from_index_bytes(bytes, index)?;
                 string.push_str(&inner_name.name);
-                total_length = total_length + inner_name.length as usize;
+                labels.append(&mut inner_name.label);
+                total_length = total_length + inner_name.packet_index as usize;
                 break;
             }else {
                 index = index + 1;
@@ -70,28 +75,48 @@ impl NAME {
                 }
                 let label = String::from_utf8(bytes.get_index_bytes(index,length as usize)?.to_vec())?;
                 string.push_str(&label);
+                labels.push(label);
                 string.push_str(".");
                 index =  index+ length as usize; 
             }
           
         }
         Ok( NAME {
+            label: labels,
             name: string,
-            length:total_length,
+            packet_index,
         })
     }
     pub fn to_bytes(&self) ->Vec<u8> {
         let mut v = Vec::<u8>::new();
-        let splits = self.name.split(".");
-        for s in splits {
+        for s in &self.label {
             v.push(s.len() as u8);
             v.extend(s.to_string().into_bytes());
         }
         v.push(0);
         v
     }
+    /// build new NAME
+    pub fn new(name:String) ->NAME{
+        NAME {
+            packet_index:0 ,
+            label: domain_to_label(&name),
+            name,
+            
+        }
+    }
+
+ 
 }
 
+fn domain_to_label(domain:&str) -> Vec<String>{
+    let mut v = Vec::<String>::new();
+    let splits = domain.split(".");
+    for s in splits {
+        v.push(s.to_string());
+    }
+    v
+}
 
 // #[derive(Debug)]
 // pub struct  QNAME {

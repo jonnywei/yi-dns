@@ -20,10 +20,7 @@ impl Message {
     /// 
     /// 
     pub fn new(domain: &str, query: bool) -> Message {
-        let qname = NAME{
-            name: domain.to_owned(),
-            length: domain.len(),
-        };
+        let qname = NAME::new(domain.to_string());
         let question = Question {
             qname, 
             qtype : QTYPE::A,
@@ -46,10 +43,7 @@ impl Message {
     /// authoritative name server query
     /// 
     pub fn new_query(domain: &str, qtype:QTYPE) -> Message {
-        let qname = NAME{
-            name: domain.to_owned(),
-            length: domain.len(),
-        };
+        let qname = NAME::new(domain.to_string());
         let question = Question {
             qname, 
             qtype : qtype,

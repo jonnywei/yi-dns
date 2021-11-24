@@ -21,6 +21,10 @@ impl DnsByteBuf {
         let id =  u8::from_be_bytes(self.bytes[p.. self.index].try_into()?);
         Ok(id)
     }
+    /// get buf current pointer
+    pub fn get_cursor(&self) -> usize {
+        self.index
+    }
 
     pub fn get_u16(&mut self) ->Result<u16> {
         let p = self.index;
@@ -33,6 +37,13 @@ impl DnsByteBuf {
         let p = self.index;
         self.index =  self.index +4;
         let id =  u32::from_be_bytes(self.bytes[p.. self.index].try_into()?);
+        Ok(id)
+    }
+
+    pub fn get_u128(&mut self) ->Result<u128> {
+        let p = self.index;
+        self.index =  self.index + 16;
+        let id =  u128::from_be_bytes(self.bytes[p.. self.index].try_into()?);
         Ok(id)
     }
 
